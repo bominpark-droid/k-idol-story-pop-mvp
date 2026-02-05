@@ -7,7 +7,7 @@ export async function POST(req: Request) {
   try {
     const { message } = await req.json();
 
-    // 1. OpenAI: 아이돌 답변 생성 (지능)
+    // 1. OpenAI: 아이돌 답변 생성
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -20,8 +20,9 @@ export async function POST(req: Request) {
     });
 
     const reply = completion.choices[0].message.content;
+    console.log("OpenAI Reply:", reply); // 답변 생성 확인용 로그
 
-    // 2. ElevenLabs: 목소리 생성 (발성)
+    // 2. ElevenLabs: 목소리 생성
     const voiceResponse = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}`,
       {
@@ -38,14 +39,19 @@ export async function POST(req: Request) {
       }
     );
 
-    if (!voiceResponse.ok) throw new Error('ElevenLabs API 호출 실패');
+    // [중요] 에러가 났을 때, ElevenLabs가 보내준 진짜 이유를 로그에 찍는 코드
+    if (!voiceResponse.ok) {
+      const errorData = await voiceResponse.json();
+      console.error("ElevenLabs 상세 에러:", errorData); // Vercel 로그에서 이 부분을 확인해야 함
+      throw new Error(`ElevenLabs Error: ${JSON.stringify(errorData)}`);
+    }
 
     const audioBuffer = await voiceResponse.arrayBuffer();
     const base64Audio = Buffer.from(audioBuffer).toString('base64');
 
     return NextResponse.json({ reply, audio: base64Audio });
   } catch (error: any) {
-    console.error("에러 발생:", error.message);
+    console.error("최종 에러 발생:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
